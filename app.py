@@ -2,12 +2,21 @@ from flask import Flask, request, jsonify, send_from_directory
 import yt_dlp
 import os
 import re
+import random
+import string
 
 app = Flask(__name__)
 
 # Directory for storing downloaded videos
 DOWNLOAD_FOLDER = os.path.join(os.getcwd(), "downloads")
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+
+# Store short links mapping to real filenames
+short_links = {}
+
+def generate_short_code(length=6):
+    """Generate a random short code for the URL"""
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
 
 def sanitize_filename(title, max_length=30):
     """Sanitize filename: Remove special characters & limit length"""
@@ -61,7 +70,11 @@ def download():
     elif filename == "DOWNLOAD_ERROR":
         return jsonify({'error': 'Failed to download video. Check URL or try again later.'}), 500
 
-    full_download_url = request.host_url + "downloaded/" + filename
+    # Generate a short random code for the URL
+    short_code = generate_short_code()
+    short_links[short_code] = filename  # Store the mapping
+
+    full_download_url = request.host_url + "d/" + short_code
     return jsonify({
         'status': 'success',
         'file': filename,
@@ -69,14 +82,14 @@ def download():
         'credit': '@AzR_projects'
     })
 
-@app.route('/downloaded/<filename>', methods=['GET'])
-def serve_video(filename):
-    """Serve the downloaded video file"""
-    file_path = os.path.join(DOWNLOAD_FOLDER, filename)
-    if os.path.exists(file_path):
+@app.route('/d/<short_code>', methods=['GET'])
+def serve_short_link(short_code):
+    """Redirect short link to the actual file download"""
+    if short_code in short_links:
+        filename = short_links[short_code]
         return send_from_directory(DOWNLOAD_FOLDER, filename, as_attachment=True)
     else:
-        return jsonify({'error': 'File not found'}), 404
+        return jsonify({'error': 'Invalid or expired link'}), 404
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

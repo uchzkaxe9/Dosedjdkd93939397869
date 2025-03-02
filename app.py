@@ -16,9 +16,16 @@ def sanitize_filename(title, max_length=30):
     title = re.sub(r'[^a-zA-Z0-9\s]', '', title)  # Keep only alphanumeric & spaces
     return title[:max_length].strip()  # Limit filename length
 
+def is_facebook_url(url):
+    """Check if the URL is a valid Facebook video URL"""
+    return "facebook.com" in url or "fb.watch" in url
+
 def download_facebook_video(url):
     """Download Facebook video and return the filename"""
     try:
+        if not is_facebook_url(url):
+            return "INVALID_URL"
+
         ydl_opts = {
             'format': 'best',
             'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(title)s.%(ext)s'),
@@ -38,7 +45,7 @@ def download_facebook_video(url):
             return safe_filename
 
     except Exception as e:
-        return str(e)
+        return "DOWNLOAD_ERROR"
 
 @app.route('/download', methods=['GET'])
 def download():
@@ -49,16 +56,18 @@ def download():
 
     filename = download_facebook_video(url)
 
-    if filename.endswith(".mp4") or filename.endswith(".webm"):
-        full_download_url = request.host_url + "downloaded/" + filename
-        return jsonify({
-            'status': 'success',
-            'file': filename,
-            'download_url': full_download_url,
-            'credit': '@AzR_projects'
-        })
-    else:
-        return jsonify({'error': filename}), 500  # Return error if download failed
+    if filename == "INVALID_URL":
+        return jsonify({'error': 'This is not a Facebook URL'}), 400
+    elif filename == "DOWNLOAD_ERROR":
+        return jsonify({'error': 'Failed to download video. Check URL or try again later.'}), 500
+
+    full_download_url = request.host_url + "downloaded/" + filename
+    return jsonify({
+        'status': 'success',
+        'file': filename,
+        'download_url': full_download_url,
+        'credit': '@AzR_projects'
+    })
 
 @app.route('/downloaded/<filename>', methods=['GET'])
 def serve_video(filename):
@@ -70,4 +79,4 @@ def serve_video(filename):
         return jsonify({'error': 'File not found'}), 404
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)  # Match Render Port Setting
+    app.run(host='0.0.0.0', port=5000)
